@@ -1,20 +1,57 @@
 import React, { Component } from 'react';
 import './App.css';
 
+const MOUSE_LEFT = 0;
+const MOUSE_RIGHT = 2;
+
+/*
+ * Get the position of the mouse relative to an element.
+ */
+function getMousePos(element, evt) {
+	const rect = element.getBoundingClientRect();
+	return [
+		evt.clientX - rect.left,
+		evt.clientY - rect.top,
+	];
+}
+
 class App extends Component {
 	componentDidMount = () => {
-		this.ctx.canvas.width = 300;
-		this.ctx.canvas.height = 400;
+		window.addEventListener('mouseup', this.handleMouseUp);
+		window.addEventListener('contextmenu', this.handleContextMenu);
+		this.ctx.canvas.width = 640;
+		this.ctx.canvas.height = 480;
 		this.lastTime = Date.now();
 		this.test = 0;
+		this.rightClickPos = undefined;
 
 		this.draw();
+	}
+
+	handleMouseDown = evt => {
+		if (evt.button === MOUSE_RIGHT) {
+			this.rightClickPos = getMousePos(this.ctx.canvas, evt);
+		}
+	}
+
+	handleMouseUp = evt => {
+	}
+
+	handleWheel = evt => {
+	}
+
+	handleContextMenu = evt => {
+		if (this.rightClickPos) {
+			this.rightClickPos = undefined;
+			evt.preventDefault();
+		}
 	}
 
 	render = () => {
 		return (
 			<div className="App">
-				<canvas ref={canvas => this.ctx = canvas.getContext('2d', {alpha: false})}>
+				<canvas onMouseDown={this.handleMouseDown} onWheel={this.handleWheel}
+					ref={canvas => this.ctx = canvas.getContext('2d', {alpha: false})}>
 					Your browser sucks.
 				</canvas>
 			</div>
