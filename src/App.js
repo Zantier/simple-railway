@@ -1,48 +1,59 @@
 import React, { Component } from 'react';
+import ZoomView from './ZoomView';
 import './App.css';
 
 const MOUSE_LEFT = 0;
 const MOUSE_RIGHT = 2;
 
-/*
- * Get the position of the mouse relative to an element.
- */
-function getMousePos(element, evt) {
-	const rect = element.getBoundingClientRect();
-	return [
-		evt.clientX - rect.left,
-		evt.clientY - rect.top,
-	];
-}
-
 class App extends Component {
+	constructor(props) {
+		super(props);
+		this.zoomView = new ZoomView([-30,-30], [1,1]);
+	}
+
 	componentDidMount = () => {
 		window.addEventListener('mouseup', this.handleMouseUp);
+		window.addEventListener('mousemove', this.handleMouseMove);
 		window.addEventListener('contextmenu', this.handleContextMenu);
 		this.ctx.canvas.width = 640;
 		this.ctx.canvas.height = 480;
-		this.lastTime = Date.now();
-		this.test = 0;
-		this.rightClickPos = undefined;
+		this.doPan = false;
+		// Position of the mouse, relative to the canvas
+		this.mousePos = [0,0];
 
 		this.draw();
 	}
 
+	updateMousePos = evt => {
+		const rect = this.ctx.canvas.getBoundingClientRect();
+		this.mousePos[0] = evt.clientX - rect.left;
+		this.mousePos[1] = evt.clientY - rect.top;
+	}
+
 	handleMouseDown = evt => {
 		if (evt.button === MOUSE_RIGHT) {
-			this.rightClickPos = getMousePos(this.ctx.canvas, evt);
+			this.updateMousePos(evt);
+			this.doPan = true;
+			this.zoomView.beginPan(this.mousePos);
 		}
 	}
 
 	handleMouseUp = evt => {
 	}
 
+	handleMouseMove = evt => {
+		this.updateMousePos(evt);
+	}
+
 	handleWheel = evt => {
+		this.updateMousePos(evt);
+		const zoom = -Math.sign(evt.deltaY);
+		this.zoomView.addZoom(zoom, this.mousePos);
 	}
 
 	handleContextMenu = evt => {
-		if (this.rightClickPos) {
-			this.rightClickPos = undefined;
+		if (this.doPan) {
+			this.doPan = false;
 			evt.preventDefault();
 		}
 	}
@@ -60,22 +71,34 @@ class App extends Component {
 
 	draw = () => {
 		this.update();
+
+		// Clear
 		this.ctx.fillStyle = '#000000';
 		this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
 
-		this.ctx.fillStyle = '#cccccc';
-		var testWidth = 100;
-		this.ctx.fillRect(testWidth + testWidth * Math.cos(this.test), testWidth + testWidth * Math.sin(this.test), 10, 10);
+		this.ctx.save();
+		this.ctx.fillStyle = '#404040';
+		const zoom = this.zoomView.getZoom();
+		this.ctx.translate(this.zoomView.destPos[0], this.zoomView.destPos[1]);
+		this.ctx.scale(zoom[0], zoom[1]);
+		this.ctx.translate(-this.zoomView.sourcePos[0], -this.zoomView.sourcePos[1]);
+		const tileCount = 10;
+		const tileWidth = 20;
+		const lineWidth = 2;
+		for (let i = 0; i < 10; i++) {
+			this.ctx.fillRect(0, i*tileWidth, tileCount*tileWidth, lineWidth);
+			this.ctx.fillRect(i*tileWidth, 0, lineWidth, tileCount*tileWidth);
+		}
+		this.ctx.restore();
 
 		requestAnimationFrame(this.draw);
 	}
 
 	update = () => {
-		var nowTime = Date.now();
-		var timeDiff = nowTime - this.lastTime;
-		this.lastTime = nowTime;
-
-		this.test += timeDiff/1000;
+		if (this.doPan) {
+			this.zoomView.pan(this.mousePos);
+		}
+		this.zoomView.update();
 	}
 }
 
