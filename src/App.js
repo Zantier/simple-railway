@@ -2,7 +2,7 @@ import React, { Component } from 'react';
 import ZoomView from './ZoomView';
 import './App.css';
 
-//const MOUSE_LEFT = 0;
+const MOUSE_LEFT = 0;
 const MOUSE_RIGHT = 2;
 const tileCount = 100;
 const tileWidth = 50;
@@ -19,6 +19,26 @@ function createArray(length, func) {
 	}
 
 	return res;
+}
+
+function getLine(subTile) {
+	// No line for the middle of the tile.
+	if (subTile[0] === 1 && subTile[1] === 1) {
+		return;
+	}
+
+	const line = new Array(2);
+	if ((subTile[0] + subTile[1]) % 2 === 0) {
+		// Even - corners
+		line[0] = [subTile[0], 1];
+		line[1] = [1, subTile[1]];
+	} else {
+		// Odd - sides
+		line[0] = [subTile[0], subTile[1]];
+		line[1] = [2 - subTile[0], 2 - subTile[1]];
+	}
+
+	return line;
 }
 
 class App extends Component {
@@ -47,6 +67,24 @@ class App extends Component {
 	}
 
 	handleMouseDown = evt => {
+		if (evt.button === MOUSE_LEFT) {
+			const [mouseTile, mouseSubTile] = this.getMouseTile();
+			const line = getLine(mouseSubTile);
+			if (mouseTile && line) {
+				const indexes = createArray(2, i => 3 * line[i][0] + line[i][1])
+				const tile = this.tiles[mouseTile[0]][mouseTile[1]];
+
+				// Add or remove track
+				if (tile[indexes[0]].includes(indexes[1])) {
+					tile[indexes[0]] = tile[indexes[0]].filter(num => num !== indexes[1]);
+					tile[indexes[1]] = tile[indexes[1]].filter(num => num !== indexes[0]);
+				} else {
+					tile[indexes[0]].push(indexes[1]);
+					tile[indexes[1]].push(indexes[0]);
+				}
+			}
+		}
+
 		if (evt.button === MOUSE_RIGHT) {
 			this.updateMousePos(evt);
 			this.doPan = true;
@@ -105,7 +143,7 @@ class App extends Component {
 		this.ctx.translate(this.zoomView.destPos[0], this.zoomView.destPos[1]);
 		this.ctx.scale(zoom[0], zoom[1]);
 		this.ctx.translate(-this.zoomView.sourcePos[0], -this.zoomView.sourcePos[1]);
-		for (let i = 0; i < tileCount; i++) {
+		for (let i = 0; i <= tileCount; i++) {
 			this.ctx.beginPath();
 			this.ctx.moveTo(0, i*tileWidth);
 			this.ctx.lineTo(tileCount*tileWidth, i*tileWidth);
@@ -114,32 +152,42 @@ class App extends Component {
 			this.ctx.stroke();
 		}
 
-		const [mouseTile, mouseSubTile] = this.getMouseTile();
-		// Don't draw if mouse is in the middle of the tile.
-		if (mouseSubTile[0] !== 1 || mouseSubTile[1] !== 1) {
-			let line = new Array(2);
-			if ((mouseSubTile[0] + mouseSubTile[1]) % 2 === 0) {
-				// Even - corners
-				line[0] = [mouseSubTile[0], 1];
-				line[1] = [1, mouseSubTile[1]];
-			} else {
-				// Odd - sides
-				line[0] = [mouseSubTile[0], mouseSubTile[1]];
-				line[1] = [2 - mouseSubTile[0], 2 - mouseSubTile[1]];
-			}
+		for (let tileI = 0; tileI < tileCount; tileI++) {
+			for (let tileJ = 0; tileJ < tileCount; tileJ++) {
+				for (let m = 0; m < 9; m++) {
+					for (let n of this.tiles[tileI][tileJ][m]) {
+						const line = [
+							[Math.floor(m / 3), mod(m, 3)],
+							[Math.floor(n / 3), mod(n, 3)],
+						];
 
-			this.ctx.lineWidth = 5;
-			this.ctx.beginPath();
-			this.ctx.moveTo(mouseTile[0]*tileWidth + line[0][0]*0.5*tileWidth,
-				mouseTile[1]*tileWidth + line[0][1]*0.5*tileWidth);
-			this.ctx.lineTo(mouseTile[0]*tileWidth + line[1][0]*0.5*tileWidth,
-				mouseTile[1]*tileWidth + line[1][1]*0.5*tileWidth);
-			this.ctx.stroke();
+						this.ctx.strokeStyle = 'rgb(64, 128, 64)';
+						this.drawLine([tileI, tileJ], line);
+					}
+				}
+			}
+		}
+
+		const [mouseTile, mouseSubTile] = this.getMouseTile();
+		const line = getLine(mouseSubTile);
+		if (mouseTile && line) {
+			this.ctx.strokeStyle = 'rgba(64, 64, 64, 0.7)';
+			this.drawLine(mouseTile, line);
 		}
 
 		this.ctx.restore();
 
 		requestAnimationFrame(this.draw);
+	}
+
+	drawLine = (tile, line) => {
+		this.ctx.lineWidth = 5;
+		this.ctx.beginPath();
+		this.ctx.moveTo(tile[0]*tileWidth + line[0][0]*0.5*tileWidth,
+			tile[1]*tileWidth + line[0][1]*0.5*tileWidth);
+		this.ctx.lineTo(tile[0]*tileWidth + line[1][0]*0.5*tileWidth,
+			tile[1]*tileWidth + line[1][1]*0.5*tileWidth);
+		this.ctx.stroke();
 	}
 
 	update = () => {
@@ -156,6 +204,10 @@ class App extends Component {
 			res[0][i] = Math.floor(sourcePos[i] / tileWidth);
 			const remainder = mod(sourcePos[i], tileWidth);
 			res[1][i] = Math.floor(remainder / tileWidth * 3);
+		}
+
+		if (res[0][0] < 0 || res[0][0] >= tileCount || res[0][1] < 0 || res[0][1] >= tileCount) {
+			res[0] = undefined;
 		}
 
 		return res;
