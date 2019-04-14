@@ -13,6 +13,7 @@ class TilePos {
 		this.pos = new Array(2);
 		this.subPos = new Array(2);
 		this.isVertical = false;
+		this.inBounds = false;
 	}
 }
 
@@ -61,6 +62,7 @@ class App extends Component {
 		// Position of the mouse, relative to the canvas
 		this.mousePos = [0,0];
 		this.mouseTile = new TilePos();
+		this.mouseDownTile = undefined;
 		this.tiles = new Array(tileCount);
 		this.tiles = createArray(tileCount, () =>
 			createArray(tileCount, () =>
@@ -82,8 +84,9 @@ class App extends Component {
 	handleMouseDown = evt => {
 		if (evt.button === MOUSE_LEFT) {
 			this.updateMouseTile();
+
 			const line = getLine(this.mouseTile.subPos, this.mouseTile.isVertical);
-			if (this.mouseTile.pos && line) {
+			if (this.mouseTile.inBounds && line) {
 				const indexes = createArray(2, i => 3 * line[i][0] + line[i][1])
 				const tile = this.tiles[this.mouseTile.pos[0]][this.mouseTile.pos[1]];
 
@@ -183,7 +186,7 @@ class App extends Component {
 
 		this.updateMouseTile();
 		const line = getLine(this.mouseTile.subPos, this.mouseTile.isVertical);
-		if (this.mouseTile.pos && line) {
+		if (this.mouseTile.inBounds && line) {
 			this.ctx.strokeStyle = 'rgba(64, 64, 64, 0.7)';
 			this.drawLine(this.mouseTile.pos, line);
 		}
@@ -213,7 +216,6 @@ class App extends Component {
 	updateMouseTile = () => {
 		const sourcePos = this.zoomView.destToSource(this.mousePos);
 		const prevIsVertical = this.mouseTile.isVertical;
-		this.mouseTile = new TilePos();
 		for (let i = 0; i < 2; i++) {
 			this.mouseTile.pos[i] = Math.floor(sourcePos[i] / tileWidth);
 			const remainder = mod(sourcePos[i], tileWidth);
@@ -223,9 +225,7 @@ class App extends Component {
 		this.mouseTile.isVertical = this.mouseTile.subPos[0] % 2 === 1 && (
 			this.mouseTile.subPos[1] % 2 === 0 || prevIsVertical);
 
-		if (this.mouseTile.pos[0] < 0 || this.mouseTile.pos[0] >= tileCount || this.mouseTile.pos[1] < 0 || this.mouseTile.pos[1] >= tileCount) {
-			this.mouseTile.pos = undefined;
-		}
+		this.mouseTile.inBounds = this.mouseTile.pos[0] >= 0 && this.mouseTile.pos[0] < tileCount && this.mouseTile.pos[1] >= 0 && this.mouseTile.pos[1] < tileCount;
 	}
 }
 
