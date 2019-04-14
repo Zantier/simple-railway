@@ -1,7 +1,9 @@
 import React, { Component } from 'react';
+import { addScalar, addThis, ang, dot, div, mul, sub, subThis } from './VecArray';
 import ZoomView from './ZoomView';
 import './App.css';
 
+const TWO_PI = 2 * Math.PI;
 const MOUSE_LEFT = 0;
 const MOUSE_RIGHT = 2;
 const tileCount = 100;
@@ -10,15 +12,38 @@ const lineWidth = 1;
 
 class TilePos {
 	constructor() {
-		this.pos = new Array(2);
+		this.floatPos = new Array(2);
+		this.intPos = new Array(2);
 		this.subPos = new Array(2);
 		this.isVertical = false;
 		this.inBounds = false;
 	}
+
+	clone = () => {
+		const res = new TilePos();
+		res.floatPos = [...this.floatPos];
+		res.intPos = [...this.intPos];
+		res.subPos = [...this.subPos];
+		res.isVertical = this.isVertical;
+		res.inBounds = this.inBounds;
+
+		return res;
+	}
 }
 
+// Modulus that's >= 0
 function mod(a, b) {
 	return (a % b + b) % b
+}
+
+// 1 if >= 0, else -1
+function nonZeroSign(num) {
+	return num >= 0 ? 1 : -1;
+}
+
+// Normalize and get the absolute of an angle
+function absAngle(angle) {
+	return Math.abs(((angle + Math.PI) % TWO_PI + TWO_PI) % TWO_PI - Math.PI);
 }
 
 function createArray(length, func) {
@@ -84,20 +109,8 @@ class App extends Component {
 	handleMouseDown = evt => {
 		if (evt.button === MOUSE_LEFT) {
 			this.updateMouseTile();
-
-			const line = getLine(this.mouseTile.subPos, this.mouseTile.isVertical);
-			if (this.mouseTile.inBounds && line) {
-				const indexes = createArray(2, i => 3 * line[i][0] + line[i][1])
-				const tile = this.tiles[this.mouseTile.pos[0]][this.mouseTile.pos[1]];
-
-				// Add or remove track
-				if (tile[indexes[0]].includes(indexes[1])) {
-					tile[indexes[0]] = tile[indexes[0]].filter(num => num !== indexes[1]);
-					tile[indexes[1]] = tile[indexes[1]].filter(num => num !== indexes[0]);
-				} else {
-					tile[indexes[0]].push(indexes[1]);
-					tile[indexes[1]].push(indexes[0]);
-				}
+			if (this.mouseTile.inBounds) {
+				this.mouseDownTile = this.mouseTile.clone();
 			}
 		}
 
@@ -109,6 +122,38 @@ class App extends Component {
 	}
 
 	handleMouseUp = evt => {
+		if (evt.button === MOUSE_LEFT && this.mouseDownTile) {
+			this.updateMousePos(evt);
+			this.updateMouseTile();
+
+			const [tempPos, dir, count] = this.getTilesBetween(this.mouseDownTile, this.mouseTile);
+			if (tempPos) {
+				// Whether to add track
+				const doAdd = !this.hasTrack(tempPos);
+
+				for (let i = 0; i <= count; i++) {
+					if (tempPos.intPos[0] < 0 || tempPos.intPos[0] >= tileCount ||
+						tempPos.intPos[1] < 0 || tempPos.intPos[1] >= tileCount) {
+						break;
+					}
+					const line = getLine(tempPos.subPos, tempPos.isVertical);
+					const indexes = createArray(2, i => 3 * line[i][0] + line[i][1])
+					const tile = this.tiles[tempPos.intPos[0]][tempPos.intPos[1]];
+
+					// Add or remove track
+					tile[indexes[0]] = tile[indexes[0]].filter(num => num !== indexes[1]);
+					tile[indexes[1]] = tile[indexes[1]].filter(num => num !== indexes[0]);
+					if (doAdd) {
+						tile[indexes[0]].push(indexes[1]);
+						tile[indexes[1]].push(indexes[0]);
+					}
+
+					addThis(tempPos.intPos, dir);
+				}
+			}
+
+			this.mouseDownTile = undefined;
+		}
 	}
 
 	handleMouseMove = evt => {
@@ -126,12 +171,6 @@ class App extends Component {
 			this.doPan = false;
 			evt.preventDefault();
 		}
-	}
-
-	updateMousePos = evt => {
-		const rect = this.ctx.canvas.getBoundingClientRect();
-		this.mousePos[0] = evt.clientX - rect.left;
-		this.mousePos[1] = evt.clientY - rect.top;
 	}
 
 	render = () => {
@@ -184,11 +223,29 @@ class App extends Component {
 			}
 		}
 
-		this.updateMouseTile();
-		const line = getLine(this.mouseTile.subPos, this.mouseTile.isVertical);
-		if (this.mouseTile.inBounds && line) {
-			this.ctx.strokeStyle = 'rgba(64, 64, 64, 0.7)';
-			this.drawLine(this.mouseTile.pos, line);
+
+		if (this.mouseDownTile) {
+			const [tempPos, dir, count] = this.getTilesBetween(this.mouseDownTile, this.mouseTile);
+			if (tempPos) {
+				this.ctx.strokeStyle = 'rgba(64, 64, 64, 0.7)';
+				for (let i = 0; i <= count; i++) {
+					if (tempPos.intPos[0] < 0 || tempPos.intPos[0] >= tileCount ||
+						tempPos.intPos[1] < 0 || tempPos.intPos[1] >= tileCount) {
+						break;
+					}
+
+					const line = getLine(tempPos.subPos, tempPos.isVertical);
+					this.drawLine(tempPos.intPos, line);
+
+					addThis(tempPos.intPos, dir);
+				}
+			}
+		} else {
+			const line = getLine(this.mouseTile.subPos, this.mouseTile.isVertical);
+			if (this.mouseTile.inBounds && line) {
+				this.ctx.strokeStyle = 'rgba(64, 64, 64, 0.7)';
+				this.drawLine(this.mouseTile.intPos, line);
+			}
 		}
 
 		this.ctx.restore();
@@ -211,13 +268,80 @@ class App extends Component {
 			this.zoomView.pan(this.mousePos);
 		}
 		this.zoomView.update();
+		this.updateMouseTile();
+	}
+
+	hasTrack = (tilePos) => {
+		const line = getLine(tilePos.subPos, tilePos.isVertical);
+		if (!tilePos.inBounds) {
+			return false;
+		}
+
+		const indexes = createArray(2, i => 3 * line[i][0] + line[i][1])
+		const tile = this.tiles[tilePos.intPos[0]][tilePos.intPos[1]];
+
+		// Add or remove track
+		return tile[indexes[0]].includes(indexes[1]);
+	}
+
+	// Get the tiles to fill in from dragging the mouse
+	//
+	// tilePos1: Start tile
+	// tilePos2: End tile
+	// return: [tilePos, dir, count]
+	getTilesBetween = (tilePos1, tilePos2) => {
+		if (!tilePos1.inBounds) {
+			return [];
+		}
+
+		if (tilePos1.intPos[0] === tilePos2.intPos[0] && tilePos1.intPos[1] === tilePos2.intPos[1]) {
+			return [tilePos2, [0,0], 0];
+		}
+
+		// Where mouse ended, relative to middle of start tile
+		const mousePos = sub(tilePos2.floatPos, addScalar(tilePos1.intPos, 0.5));
+		// Nearest 45 degree direction
+		const dir45 = [nonZeroSign(mousePos[0]), nonZeroSign(mousePos[1])];
+		const ang45 = ang(dir45);
+
+		// Nearest 90 degree direction
+		let dir90 = undefined;
+		if (Math.abs(mousePos[0]) > Math.abs(mousePos[1])) {
+			dir90 = [nonZeroSign(mousePos[0]), 0];
+		} else {
+			dir90 = [0, nonZeroSign(mousePos[1])];
+		}
+		const ang90 = ang(dir90);
+
+		// Where mouse ended, relative to edge of start tile
+		const edgePos = sub(mousePos, mul(dir90, 0.5));
+		const angMouse = ang(edgePos);
+
+		if (absAngle(angMouse - ang45) < absAngle(angMouse - ang90)) {
+			// Move in 45 degree direction
+			return [];
+		} else {
+			// Move in 90 degree direction
+			const count = Math.ceil(dot(dir90, edgePos));
+			const returnPos = tilePos1.clone();
+			returnPos.subPos = subThis([1,1], dir90);
+			return [returnPos, dir90, count];
+		}
+	}
+
+	updateMousePos = evt => {
+		const rect = this.ctx.canvas.getBoundingClientRect();
+		this.mousePos[0] = evt.clientX - rect.left;
+		this.mousePos[1] = evt.clientY - rect.top;
 	}
 
 	updateMouseTile = () => {
 		const sourcePos = this.zoomView.destToSource(this.mousePos);
 		const prevIsVertical = this.mouseTile.isVertical;
 		for (let i = 0; i < 2; i++) {
-			this.mouseTile.pos[i] = Math.floor(sourcePos[i] / tileWidth);
+			const floatPos = sourcePos[i] / tileWidth;
+			this.mouseTile.floatPos[i] = floatPos
+			this.mouseTile.intPos[i] = Math.floor(floatPos);
 			const remainder = mod(sourcePos[i], tileWidth);
 			this.mouseTile.subPos[i] = Math.floor(remainder / tileWidth * 3);
 		}
@@ -225,7 +349,7 @@ class App extends Component {
 		this.mouseTile.isVertical = this.mouseTile.subPos[0] % 2 === 1 && (
 			this.mouseTile.subPos[1] % 2 === 0 || prevIsVertical);
 
-		this.mouseTile.inBounds = this.mouseTile.pos[0] >= 0 && this.mouseTile.pos[0] < tileCount && this.mouseTile.pos[1] >= 0 && this.mouseTile.pos[1] < tileCount;
+		this.mouseTile.inBounds = this.mouseTile.intPos[0] >= 0 && this.mouseTile.intPos[0] < tileCount && this.mouseTile.intPos[1] >= 0 && this.mouseTile.intPos[1] < tileCount;
 	}
 }
 
