@@ -8,6 +8,14 @@ const tileCount = 100;
 const tileWidth = 50;
 const lineWidth = 1;
 
+class TilePos {
+	constructor() {
+		this.pos = new Array(2);
+		this.subPos = new Array(2);
+		this.isVertical = false;
+	}
+}
+
 function mod(a, b) {
 	return (a % b + b) % b
 }
@@ -21,10 +29,14 @@ function createArray(length, func) {
 	return res;
 }
 
-function getLine(subTile) {
+function getLine(subTile, isVertical) {
 	// No line for the middle of the tile.
 	if (subTile[0] === 1 && subTile[1] === 1) {
-		return;
+		if (isVertical) {
+			return [[1,0], [1,2]];
+		} else {
+			return [[0,1], [2,1]];
+		}
 	}
 
 	const line = new Array(2);
@@ -45,17 +57,10 @@ class App extends Component {
 	constructor(props) {
 		super(props);
 		this.zoomView = new ZoomView([-30,-30], [1,1]);
-	}
-
-	componentDidMount = () => {
-		window.addEventListener('mouseup', this.handleMouseUp);
-		window.addEventListener('mousemove', this.handleMouseMove);
-		window.addEventListener('contextmenu', this.handleContextMenu);
-		this.ctx.canvas.width = 640;
-		this.ctx.canvas.height = 480;
 		this.doPan = false;
 		// Position of the mouse, relative to the canvas
 		this.mousePos = [0,0];
+		this.mouseTile = new TilePos();
 		this.tiles = new Array(tileCount);
 		this.tiles = createArray(tileCount, () =>
 			createArray(tileCount, () =>
@@ -63,16 +68,24 @@ class App extends Component {
 			)
 		);
 
+		window.addEventListener('mouseup', this.handleMouseUp);
+		window.addEventListener('mousemove', this.handleMouseMove);
+		window.addEventListener('contextmenu', this.handleContextMenu);
+	}
+
+	componentDidMount = () => {
+		this.ctx.canvas.width = 640;
+		this.ctx.canvas.height = 480;
 		this.draw();
 	}
 
 	handleMouseDown = evt => {
 		if (evt.button === MOUSE_LEFT) {
-			const [mouseTile, mouseSubTile] = this.getMouseTile();
-			const line = getLine(mouseSubTile);
-			if (mouseTile && line) {
+			this.updateMouseTile();
+			const line = getLine(this.mouseTile.subPos, this.mouseTile.isVertical);
+			if (this.mouseTile.pos && line) {
 				const indexes = createArray(2, i => 3 * line[i][0] + line[i][1])
-				const tile = this.tiles[mouseTile[0]][mouseTile[1]];
+				const tile = this.tiles[this.mouseTile.pos[0]][this.mouseTile.pos[1]];
 
 				// Add or remove track
 				if (tile[indexes[0]].includes(indexes[1])) {
@@ -168,11 +181,11 @@ class App extends Component {
 			}
 		}
 
-		const [mouseTile, mouseSubTile] = this.getMouseTile();
-		const line = getLine(mouseSubTile);
-		if (mouseTile && line) {
+		this.updateMouseTile();
+		const line = getLine(this.mouseTile.subPos, this.mouseTile.isVertical);
+		if (this.mouseTile.pos && line) {
 			this.ctx.strokeStyle = 'rgba(64, 64, 64, 0.7)';
-			this.drawLine(mouseTile, line);
+			this.drawLine(this.mouseTile.pos, line);
 		}
 
 		this.ctx.restore();
@@ -197,20 +210,22 @@ class App extends Component {
 		this.zoomView.update();
 	}
 
-	getMouseTile = () => {
+	updateMouseTile = () => {
 		const sourcePos = this.zoomView.destToSource(this.mousePos);
-		const res = createArray(2, () => new Array(2));
+		const prevIsVertical = this.mouseTile.isVertical;
+		this.mouseTile = new TilePos();
 		for (let i = 0; i < 2; i++) {
-			res[0][i] = Math.floor(sourcePos[i] / tileWidth);
+			this.mouseTile.pos[i] = Math.floor(sourcePos[i] / tileWidth);
 			const remainder = mod(sourcePos[i], tileWidth);
-			res[1][i] = Math.floor(remainder / tileWidth * 3);
+			this.mouseTile.subPos[i] = Math.floor(remainder / tileWidth * 3);
 		}
 
-		if (res[0][0] < 0 || res[0][0] >= tileCount || res[0][1] < 0 || res[0][1] >= tileCount) {
-			res[0] = undefined;
-		}
+		this.mouseTile.isVertical = this.mouseTile.subPos[0] % 2 === 1 && (
+			this.mouseTile.subPos[1] % 2 === 0 || prevIsVertical);
 
-		return res;
+		if (this.mouseTile.pos[0] < 0 || this.mouseTile.pos[0] >= tileCount || this.mouseTile.pos[1] < 0 || this.mouseTile.pos[1] >= tileCount) {
+			this.mouseTile.pos = undefined;
+		}
 	}
 }
 
