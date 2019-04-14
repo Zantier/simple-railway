@@ -9,8 +9,6 @@ export default class ZoomView {
 		this.sourcePos = sourcePos;
 		this.destPos = [0,0];
 		this.initialZoom = initialZoom;
-		// How much to zoom by each time
-		this.zoomMultiplier = 1.5;
 		// The target for how zoomed in to be
 		this.targetZoomLevel = 0;
 		// How zoomed in we actually are
@@ -23,7 +21,7 @@ export default class ZoomView {
 	}
 
 	getZoom = () => {
-		const zoomVal = Math.pow(this.zoomMultiplier, this.zoomLevel);
+		const zoomVal = Math.pow(Math.E, this.zoomLevel);
 		const res = mult(this.initialZoom, zoomVal);
 		return res;
 	}

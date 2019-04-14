@@ -114,7 +114,7 @@ class App extends Component {
 
 	handleWheel = evt => {
 		this.updateMousePos(evt);
-		const zoom = -Math.sign(evt.deltaY);
+		const zoom = -evt.deltaY/100;
 		this.zoomView.addZoom(zoom, this.mousePos);
 	}
 
