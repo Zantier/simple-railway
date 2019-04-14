@@ -15,11 +15,11 @@ export function divVecThis(vec1, vec2) {
 	}
 }
 
-export function mult(vec1, val) {
+export function mul(vec1, val) {
 	return vec1.map(x => x * val);
 }
 
-export function multVecThis(vec1, vec2) {
+export function mulVecThis(vec1, vec2) {
 	for (let i = 0; i < vec1.length; i++) {
 		vec1[i] *= vec2[i];
 	}

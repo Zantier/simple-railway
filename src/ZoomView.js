@@ -1,4 +1,4 @@
-import { addThis, divVecThis, mult, multVecThis, sub } from './VecArray';
+import { addThis, divVecThis, mul, mulVecThis, sub } from './VecArray';
 
 /*
  * Convert between a source coordinate system, and a destination (typically
@@ -22,14 +22,14 @@ export default class ZoomView {
 
 	getZoom = () => {
 		const zoomVal = Math.pow(Math.E, this.zoomLevel);
-		const res = mult(this.initialZoom, zoomVal);
+		const res = mul(this.initialZoom, zoomVal);
 		return res;
 	}
 
 	sourceToDest = pair => {
 		const zoom = this.getZoom();
 		let res = sub(pair, this.sourcePos);
-		multVecThis(res, zoom);
+		mulVecThis(res, zoom);
 		addThis(res, this.destPos);
 		return res;
 	}
