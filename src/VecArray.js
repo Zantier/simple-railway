@@ -7,6 +7,10 @@ export function addScalar(vec1, val) {
 	return vec1.map(x => x + val);
 }
 
+export function add(vec1, vec2) {
+	return vec1.map((x, i) => x + vec2[i]);
+}
+
 export function addThis(vec1, vec2) {
 	for (let i = 0; i < vec1.length; i++) {
 		vec1[i] += vec2[i];

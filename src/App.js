@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { addScalar, addThis, ang, dot, div, mul, sub, subThis } from './VecArray';
+import { addScalar, add, addThis, ang, dot, div, mul, sub, subThis } from './VecArray';
 import ZoomView from './ZoomView';
 import './App.css';
 
@@ -126,19 +126,22 @@ class App extends Component {
 			this.updateMousePos(evt);
 			this.updateMouseTile();
 
-			const [tempPos, dir, count] = this.getTilesBetween(this.mouseDownTile, this.mouseTile);
-			if (tempPos) {
+			const [lineStart, dir, count] = this.getTilesBetween(this.mouseDownTile, this.mouseTile);
+			if (lineStart) {
+				let line = [lineStart, add(lineStart, dir)];
+				let tempPos = [...this.mouseDownTile.intPos];
 				// Whether to add track
-				const doAdd = !this.hasTrack(tempPos);
+				const doAdd = !this.hasTrack(tempPos, line);
 
 				for (let i = 0; i <= count; i++) {
-					if (tempPos.intPos[0] < 0 || tempPos.intPos[0] >= tileCount ||
-						tempPos.intPos[1] < 0 || tempPos.intPos[1] >= tileCount) {
+					if (tempPos[0] < 0 || tempPos[0] >= tileCount ||
+						tempPos[1] < 0 || tempPos[1] >= tileCount) {
 						break;
 					}
-					const line = getLine(tempPos.subPos, tempPos.isVertical);
+
+					line[1] = add(line[0], dir);
 					const indexes = createArray(2, i => 3 * line[i][0] + line[i][1])
-					const tile = this.tiles[tempPos.intPos[0]][tempPos.intPos[1]];
+					const tile = this.tiles[tempPos[0]][tempPos[1]];
 
 					// Add or remove track
 					tile[indexes[0]] = tile[indexes[0]].filter(num => num !== indexes[1]);
@@ -148,7 +151,10 @@ class App extends Component {
 						tile[indexes[1]].push(indexes[0]);
 					}
 
-					addThis(tempPos.intPos, dir);
+					// From line[1], we can figure out the next tile to draw in
+					addThis(tempPos, addScalar(line[1], -1));
+					line[0][0] = 2 - line[1][0];
+					line[0][1] = 2 - line[1][1];
 				}
 			}
 
@@ -225,19 +231,24 @@ class App extends Component {
 
 
 		if (this.mouseDownTile) {
-			const [tempPos, dir, count] = this.getTilesBetween(this.mouseDownTile, this.mouseTile);
-			if (tempPos) {
+			const [lineStart, dir, count] = this.getTilesBetween(this.mouseDownTile, this.mouseTile);
+			if (lineStart) {
+				let line = [lineStart, undefined];
+				let tempPos = [...this.mouseDownTile.intPos];
 				this.ctx.strokeStyle = 'rgba(64, 64, 64, 0.7)';
 				for (let i = 0; i <= count; i++) {
-					if (tempPos.intPos[0] < 0 || tempPos.intPos[0] >= tileCount ||
-						tempPos.intPos[1] < 0 || tempPos.intPos[1] >= tileCount) {
+					if (tempPos[0] < 0 || tempPos[0] >= tileCount ||
+						tempPos[1] < 0 || tempPos[1] >= tileCount) {
 						break;
 					}
 
-					const line = getLine(tempPos.subPos, tempPos.isVertical);
-					this.drawLine(tempPos.intPos, line);
+					line[1] = add(line[0], dir);
+					this.drawLine(tempPos, line);
 
-					addThis(tempPos.intPos, dir);
+					// From line[1], we can figure out the next tile to draw in
+					addThis(tempPos, addScalar(line[1], -1));
+					line[0][0] = 2 - line[1][0];
+					line[0][1] = 2 - line[1][1];
 				}
 			}
 		} else {
@@ -271,14 +282,9 @@ class App extends Component {
 		this.updateMouseTile();
 	}
 
-	hasTrack = (tilePos) => {
-		const line = getLine(tilePos.subPos, tilePos.isVertical);
-		if (!tilePos.inBounds) {
-			return false;
-		}
-
+	hasTrack = (tilePos, line) => {
 		const indexes = createArray(2, i => 3 * line[i][0] + line[i][1])
-		const tile = this.tiles[tilePos.intPos[0]][tilePos.intPos[1]];
+		const tile = this.tiles[tilePos[0]][tilePos[1]];
 
 		// Add or remove track
 		return tile[indexes[0]].includes(indexes[1]);
@@ -288,14 +294,15 @@ class App extends Component {
 	//
 	// tilePos1: Start tile
 	// tilePos2: End tile
-	// return: [tilePos, dir, count]
+	// return: [lineStart, dir, count]
 	getTilesBetween = (tilePos1, tilePos2) => {
 		if (!tilePos1.inBounds) {
 			return [];
 		}
 
 		if (tilePos1.intPos[0] === tilePos2.intPos[0] && tilePos1.intPos[1] === tilePos2.intPos[1]) {
-			return [tilePos2, [0,0], 0];
+			const line = getLine(tilePos2.subPos, tilePos2.isVertical);
+			return [line[0], sub(line[1], line[0]), 0];
 		}
 
 		// Where mouse ended, relative to middle of start tile
@@ -304,7 +311,8 @@ class App extends Component {
 		const dir45 = [nonZeroSign(mousePos[0]), nonZeroSign(mousePos[1])];
 		const ang45 = ang(dir45);
 
-		// Nearest 90 degree direction
+		// Nearest 90 degree direction.
+		// Also tells us which side of the rectangle to start 45 degree line from.
 		let dir90 = undefined;
 		if (Math.abs(mousePos[0]) > Math.abs(mousePos[1])) {
 			dir90 = [nonZeroSign(mousePos[0]), 0];
@@ -319,13 +327,14 @@ class App extends Component {
 
 		if (absAngle(angMouse - ang45) < absAngle(angMouse - ang90)) {
 			// Move in 45 degree direction
-			return [];
+			const count = Math.ceil(dot(dir45, edgePos));
+			const lineStart = subThis(addThis([1,1], dir90), dir45);
+			return [lineStart, dir45, count];
 		} else {
 			// Move in 90 degree direction
 			const count = Math.ceil(dot(dir90, edgePos));
-			const returnPos = tilePos1.clone();
-			returnPos.subPos = subThis([1,1], dir90);
-			return [returnPos, dir90, count];
+			const lineStart = subThis([1,1], dir90);
+			return [lineStart, mul(dir90, 2), count];
 		}
 	}
 
