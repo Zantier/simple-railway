@@ -198,7 +198,7 @@ class App extends Component {
 		this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
 
 		this.ctx.save();
-		this.ctx.strokeStyle = '#202020';
+		this.ctx.strokeStyle = '#404040';
 		this.ctx.lineWidth = lineWidth;
 		const zoom = this.zoomView.getZoom();
 		this.ctx.translate(this.zoomView.destPos[0], this.zoomView.destPos[1]);
